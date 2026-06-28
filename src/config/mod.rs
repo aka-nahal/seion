@@ -28,6 +28,8 @@ pub struct Config {
     pub daily_quote: bool,
     /// Drift a little rain across the screen when idle.
     pub rain_on_idle: bool,
+    /// Breathe a soft visualizer band behind the now-playing screen.
+    pub visualizer: bool,
 }
 
 impl Default for Config {
@@ -40,6 +42,7 @@ impl Default for Config {
             ytdlp_path: "yt-dlp".to_string(),
             daily_quote: true,
             rain_on_idle: true,
+            visualizer: true,
         }
     }
 }

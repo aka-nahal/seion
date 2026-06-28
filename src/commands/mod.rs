@@ -78,6 +78,8 @@ pub enum Action {
     ZenMode,
     /// Toggle the idle rain.
     ToggleRain,
+    /// Toggle the now-playing visualizer.
+    ToggleVisualizer,
 
     // text editing (search box)
     /// Insert a character.
@@ -149,6 +151,7 @@ fn resolve_char(c: char) -> Option<Action> {
         'f' => Some(Action::FocusMode),
         'z' => Some(Action::ZenMode),
         'w' => Some(Action::ToggleRain),
+        'v' => Some(Action::ToggleVisualizer),
         '+' | '=' => Some(Action::VolumeUp),
         '-' | '_' => Some(Action::VolumeDown),
         _ => None,
@@ -190,7 +193,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("p", "playlists"),
     ("s", "settings"),
     ("f · z", "focus · zen mode"),
-    ("w", "toggle rain"),
+    ("w · v", "toggle rain · visualizer"),
     ("?", "this help"),
     ("esc", "back"),
     ("ctrl+c", "quit"),

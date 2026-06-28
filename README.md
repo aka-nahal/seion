@@ -22,7 +22,8 @@ colours, no sharp borders, no unnecessary animation — silence over complexity.
 
 It is a small native binary (**~1.8 MB**, no runtime, RAM in the low tens of MB)
 written in Rust with [ratatui](https://ratatui.rs). Audio is played by **mpv**
-over its JSON IPC interface; search and stream resolution use **yt-dlp**.
+over its JSON IPC interface; search and stream resolution use **yt-dlp**. While a
+track plays, a soft visualizer breathes quietly behind the now-playing screen.
 
 ## Requirements
 
@@ -85,22 +86,25 @@ Everything is keyboard-driven. Press **?** at any time for this list.
 | `s` | settings |
 | `f` · `z` | focus · zen mode |
 | `w` | toggle idle rain |
+| `v` | toggle visualizer |
 | `esc` | back |
 | `ctrl+c` | quit |
 
 ## Themes
 
-Seven calm presets, cycled from **settings** (or set `theme` in the config):
+Nine calm presets, cycled from **settings** (or set `theme` in the config):
 *kyoto night* (default), *sakura dawn*, *bamboo mist*, *rain temple*,
-*moon garden*, *autumn maple*, *winter shrine*. None are saturated; none are loud.
+*moon garden*, *autumn maple*, *winter shrine*, *ink wash*, *plum rain*. None are
+saturated; none are loud. The settings screen shows a live swatch of the palette
+as you cycle, and the same colours flow through the visualizer.
 
 ## Configuration & data
 
 Stored under your platform's standard directories (via `directories`):
 
 - **config** — `config.toml` (theme, volume, search result count, mpv/yt-dlp
-  paths, idle rain, daily quote). Hand-editable; missing keys fall back to
-  defaults, malformed files fall back entirely.
+  paths, idle rain, visualizer, daily quote). Hand-editable; missing keys fall
+  back to defaults, malformed files fall back entirely.
 - **data** — `seion.db` (SQLite: liked songs + history) and `downloads/`
   (offline audio, played directly like any other track).
 
@@ -140,9 +144,9 @@ src/
 ## Status
 
 The calm core is complete and working: splash, search, playback, queue,
-liked/history, downloads & offline playback, now-playing, lyrics view, settings,
-seven themes, focus/zen modes, and idle rain. Playlists and a remote lyrics
-provider are intentionally left as quiet placeholders.
+liked/history, downloads & offline playback, now-playing with a soft visualizer,
+lyrics view, settings, nine themes, focus/zen modes, and idle rain. Playlists and
+a remote lyrics provider are intentionally left as quiet placeholders.
 
 ## License
 

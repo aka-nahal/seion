@@ -25,6 +25,17 @@ use crate::theme::Theme;
 use crate::widgets::input::Input;
 use crate::{commands, ui, utils, youtube};
 
+/// The animation tick period. ~10 Hz keeps the visualizer and idle rain smooth
+/// while staying light. The windows below are expressed in ticks derived from
+/// it, so they hold their wall-clock length if the rate ever changes.
+const TICK_MS: u64 = 100;
+/// Ticks per second, derived from [`TICK_MS`].
+const TICKS_PER_SEC: u64 = 1000 / TICK_MS;
+/// How long a status line lingers before it fades (~4 seconds).
+const STATUS_TTL_TICKS: u64 = TICKS_PER_SEC * 4;
+/// How long after the last keystroke a debounced search fires (~0.5 seconds).
+const SEARCH_DEBOUNCE_TICKS: u64 = TICKS_PER_SEC / 2;
+
 /// The screens of Seion. `Splash` is the opening breath; the rest are reachable
 /// by keyboard. Lyrics is opened from Now Playing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +103,7 @@ pub const LIBRARY_ITEMS: &[(&str, View)] = &[
 pub const SETTINGS_ITEMS: &[&str] = &[
     "theme",
     "idle rain",
+    "visualizer",
     "daily quote",
     "audio backend",
     "search results",
@@ -354,13 +366,15 @@ impl App {
 
         // Let an old status fade after roughly four seconds.
         if let Some(status) = &self.status
-            && self.tick_count.saturating_sub(status.created_tick) > 16
+            && self.tick_count.saturating_sub(status.created_tick) > STATUS_TTL_TICKS
         {
             self.status = None;
         }
 
-        // Fire a debounced search a couple of ticks after the last keystroke.
-        if self.search_dirty && self.tick_count.saturating_sub(self.search_dirty_at) >= 2 {
+        // Fire a debounced search a short while after the last keystroke.
+        if self.search_dirty
+            && self.tick_count.saturating_sub(self.search_dirty_at) >= SEARCH_DEBOUNCE_TICKS
+        {
             self.search_dirty = false;
             self.run_search();
         }
@@ -465,7 +479,7 @@ fn spawn_input(tx: UnboundedSender<AppEvent>) {
 /// Spawn the ticker that drives animations and the search debounce.
 fn spawn_ticker(tx: UnboundedSender<AppEvent>) {
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(250));
+        let mut interval = tokio::time::interval(Duration::from_millis(TICK_MS));
         loop {
             interval.tick().await;
             if tx.send(AppEvent::Tick).is_err() {

@@ -28,7 +28,9 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let drop_color = utils::lerp_color(theme.background, theme.muted, 0.22);
     let trail_color = utils::lerp_color(theme.background, theme.muted, 0.12);
     let height = area.height as u64;
-    let t = app.tick_count;
+    // Advance every other tick so the rain keeps its slow, calm fall even though
+    // the ticker now runs at ~10 Hz (for the visualizer's sake).
+    let t = app.tick_count / 2;
     let buf = frame.buffer_mut();
 
     for col in 0..area.width {

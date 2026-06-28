@@ -15,6 +15,7 @@ pub mod rain;
 pub mod search;
 pub mod settings;
 pub mod splash;
+pub mod visualizer;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
@@ -55,9 +56,9 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         return;
     }
 
-    // Zen mode: nothing but the track, fullscreen.
+    // Zen mode: nothing but the track and a full-width visualizer, fullscreen.
     if app.zen_mode {
-        now_playing::render(frame, content_area(screen), app);
+        now_playing::render_zen(frame, screen, app);
         if app.overlay == Some(Overlay::Help) {
             help::render(frame, screen, app);
         }
@@ -142,6 +143,19 @@ pub fn selection_bg(theme: &Theme) -> Color {
     utils::lerp_color(theme.background, theme.selection, 0.45)
 }
 
+/// A colour along the theme's gentle spectrum — `secondary` at the foot,
+/// through `accent`, up to `highlight` at the crest. Used for the visualizer's
+/// vertical gradient so the band is coloured by the active theme. `t` is
+/// clamped to `0..=1`.
+pub fn level_color(theme: &Theme, t: f32) -> Color {
+    let t = t.clamp(0.0, 1.0);
+    if t < 0.5 {
+        utils::lerp_color(theme.secondary, theme.accent, t * 2.0)
+    } else {
+        utils::lerp_color(theme.accent, theme.highlight, (t - 0.5) * 2.0)
+    }
+}
+
 /// The index of the currently playing track within `list`, if it appears there
 /// — so views can mark it with a small ♪.
 pub fn now_playing_index(list: &[Track], current: &Option<Track>) -> Option<usize> {
@@ -214,5 +228,36 @@ mod tests {
             app.view = view;
             terminal.draw(|f| render(f, &mut app)).unwrap();
         }
+    }
+
+    /// Now-playing must render both with the visualizer and with it off, and zen
+    /// mode must render at both a normal and an absurdly small size.
+    #[tokio::test(flavor = "current_thread")]
+    async fn visualizer_and_zen_render() {
+        let (mut app, _rx) = App::new().await.unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        app.view = View::NowPlaying;
+        for on in [true, false] {
+            app.config.visualizer = on;
+            terminal.draw(|f| render(f, &mut app)).unwrap();
+            app.zen_mode = true;
+            terminal.draw(|f| render(f, &mut app)).unwrap();
+            app.zen_mode = false;
+        }
+        // Zen on a near-zero terminal must not panic either.
+        let mut tiny = Terminal::new(TestBackend::new(5, 4)).unwrap();
+        app.zen_mode = true;
+        tiny.draw(|f| render(f, &mut app)).unwrap();
+    }
+
+    #[test]
+    fn level_color_spans_the_theme_spectrum() {
+        let t = Theme::kyoto_night();
+        assert_eq!(level_color(&t, 0.0), t.secondary);
+        assert_eq!(level_color(&t, 0.5), t.accent);
+        assert_eq!(level_color(&t, 1.0), t.highlight);
+        // Out-of-range input is clamped, not panicked.
+        assert_eq!(level_color(&t, -1.0), t.secondary);
+        assert_eq!(level_color(&t, 2.0), t.highlight);
     }
 }

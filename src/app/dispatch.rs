@@ -77,6 +77,12 @@ impl App {
                 let on = self.config.rain_on_idle;
                 self.set_status(if on { "rain on" } else { "rain off" }, false);
             }
+            ToggleVisualizer => {
+                self.config.visualizer = !self.config.visualizer;
+                let _ = self.config.save();
+                let on = self.config.visualizer;
+                self.set_status(if on { "visualizer on" } else { "visualizer off" }, false);
+            }
 
             InputChar(c) => {
                 self.search.insert(c);
@@ -356,12 +362,18 @@ impl App {
                 self.set_status(if on { "idle rain on" } else { "idle rain off" }, false);
             }
             2 => {
+                self.config.visualizer = !self.config.visualizer;
+                let _ = self.config.save();
+                let on = self.config.visualizer;
+                self.set_status(if on { "visualizer on" } else { "visualizer off" }, false);
+            }
+            3 => {
                 self.config.daily_quote = !self.config.daily_quote;
                 let _ = self.config.save();
                 let on = self.config.daily_quote;
                 self.set_status(if on { "daily quote on" } else { "daily quote off" }, false);
             }
-            3 => {
+            4 => {
                 let backend = self.config.mpv_path.clone();
                 let note = if self.player.is_available() {
                     format!("audio backend — {backend}")
@@ -370,7 +382,7 @@ impl App {
                 };
                 self.set_status(note, false);
             }
-            4 => {
+            5 => {
                 let next = match self.config.search_limit {
                     n if n < 20 => 20,
                     n if n < 30 => 30,

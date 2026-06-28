@@ -13,8 +13,8 @@ use crate::utils;
 /// Render the splash, fading in over the first second or so.
 pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;
-    // 0.0 → 1.0 over ~8 ticks (about a second).
-    let t = (app.splash_frame as f32 / 8.0).min(1.0);
+    // 0.0 → 1.0 over ~10 ticks (about a second at the ~10 Hz tick).
+    let t = (app.splash_frame as f32 / 10.0).min(1.0);
     let logo = utils::lerp_color(theme.background, theme.accent, t);
     let text = utils::lerp_color(theme.background, theme.muted, t);
 

@@ -172,8 +172,44 @@ impl Theme {
         }
     }
 
+    /// Sumi-e — wet ink on warm paper, almost without colour.
+    pub const fn ink_wash() -> Self {
+        Self {
+            name: "ink wash",
+            background: rgb(0x12, 0x12, 0x11),
+            surface: rgb(0x1A, 0x1A, 0x18),
+            panel: rgb(0x23, 0x23, 0x20),
+            text: rgb(0xE6, 0xE3, 0xDA),
+            muted: rgb(0x9C, 0x99, 0x90),
+            accent: rgb(0xA8, 0xA2, 0x96),
+            secondary: rgb(0x82, 0x7E, 0x74),
+            highlight: rgb(0xCF, 0xC8, 0xB8),
+            selection: rgb(0x6A, 0x66, 0x5C),
+            success: rgb(0x93, 0xA8, 0x90),
+            error: rgb(0xB0, 0x82, 0x74),
+        }
+    }
+
+    /// Plum rain (梅雨) — the early-summer downpour, indigo deepening to violet.
+    pub const fn plum_rain() -> Self {
+        Self {
+            name: "plum rain",
+            background: rgb(0x12, 0x10, 0x16),
+            surface: rgb(0x1B, 0x17, 0x20),
+            panel: rgb(0x25, 0x20, 0x2C),
+            text: rgb(0xE8, 0xE2, 0xEC),
+            muted: rgb(0xA6, 0x9F, 0xB0),
+            accent: rgb(0xA0, 0x8C, 0xC0),
+            secondary: rgb(0x80, 0x70, 0xA0),
+            highlight: rgb(0xCF, 0xC2, 0xDC),
+            selection: rgb(0x6C, 0x5C, 0x86),
+            success: rgb(0x8F, 0xB9, 0xA8),
+            error: rgb(0xB8, 0x7C, 0x86),
+        }
+    }
+
     /// Every preset, in display order. Used by Settings to cycle themes.
-    pub const PRESETS: [fn() -> Theme; 7] = [
+    pub const PRESETS: [fn() -> Theme; 9] = [
         Theme::kyoto_night,
         Theme::sakura_dawn,
         Theme::bamboo_mist,
@@ -181,6 +217,8 @@ impl Theme {
         Theme::moon_garden,
         Theme::autumn_maple,
         Theme::winter_shrine,
+        Theme::ink_wash,
+        Theme::plum_rain,
     ];
 
     /// Resolve a theme by (case-insensitive) name, falling back to the default.
