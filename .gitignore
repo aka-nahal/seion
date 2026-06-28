@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+*.pdb
+
+# runtime / user data (created under the OS config/cache dirs, but ignore any local copies)
+/seion.db
+/seion.db-*
+*.sqlite
+*.sqlite-*
+
+# editor noise
+.idea/
+.vscode/
+*.swp
+.DS_Store

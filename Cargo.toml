@@ -1,0 +1,58 @@
+[package]
+name = "seion"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "静音 (Seion) — an ultra-lightweight, calm terminal YouTube Music client"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/flyingmindsagency/Seion"
+keywords = ["tui", "music", "youtube", "ratatui", "minimal"]
+categories = ["command-line-utilities", "multimedia::audio"]
+
+[dependencies]
+# terminal ui — crossterm is re-exported as `ratatui::crossterm`, so we import it
+# from there and avoid a direct dependency (which could drift to a skewed version
+# and produce two incompatible Event/KeyCode types).
+ratatui = "0.30"
+
+# async runtime — single-threaded scheduler keeps it small and quiet; only the
+# features we actually use, to keep the binary lean.
+tokio = { version = "1", features = [
+    "rt",       # current-thread runtime
+    "macros",   # #[tokio::main]
+    "net",      # windows named pipe / unix socket for mpv ipc
+    "process",  # spawn yt-dlp / mpv
+    "sync",     # mpsc channels
+    "time",     # interval / sleep / timeout
+    "io-util",  # AsyncBufRead / AsyncWrite for the ipc protocol
+] }
+
+# serialization / config / ipc
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+
+# storage
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+# text width (CJK-aware) — matches ratatui's own dependency, so no extra build
+unicode-width = "0.2"
+
+# platform paths + ergonomics
+directories = "6"
+anyhow = "1"
+thiserror = "2"
+
+# Size + startup tuning. The goal is a small, fast, quiet binary. We keep the
+# default unwinding panic strategy (not `abort`) so that on a panic the async
+# tasks' `Drop`s still run — which is what kills the mpv child process rather
+# than orphaning it. The size cost over `abort` is small.
+[profile.release]
+opt-level = "z"     # optimize for size
+lto = true          # whole-program optimization
+codegen-units = 1   # better optimization at the cost of compile time
+strip = true        # drop symbols
+
+[profile.dev]
+opt-level = 1       # keep iteration responsive without being unbearably slow
