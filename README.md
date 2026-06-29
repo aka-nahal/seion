@@ -69,12 +69,17 @@ Everything is keyboard-driven. Press **?** at any time for this list.
 | key | |
 |-----|-|
 | `/` | search |
+| `/playlist <query>` | search playlists (`enter` plays one · `a` queues it) |
+| paste a URL | playlist → `enter` plays it · single video → `enter` plays the track |
 | `enter` | play · open |
 | `space` | pause · resume |
+| `.` | stop |
 | `j` · `k` | next · previous track |
 | `↑` · `↓` | move selection |
+| `home` · `end` | jump to top · bottom of the list |
 | `←` · `→` | seek |
 | `+` · `-` | volume |
+| `x` | mute · unmute |
 | `l` | like |
 | `a` | add to queue |
 | `r` · `m` | repeat · shuffle |
@@ -85,6 +90,7 @@ Everything is keyboard-driven. Press **?** at any time for this list.
 | `n` | now playing |
 | `p` | playlists |
 | `s` | settings |
+| `t` | cycle theme |
 | `f` · `z` | focus · zen mode |
 | `w` | toggle idle rain |
 | `v` | toggle visualizer |

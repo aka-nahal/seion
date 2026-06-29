@@ -60,6 +60,19 @@ impl Track {
     }
 }
 
+/// A YouTube playlist, as returned by a playlist search. Lightweight: just
+/// enough to show it and, on selection, fetch its tracks by [`id`](Self::id).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Playlist {
+    /// The YouTube list id (e.g. `PL…`), used to load the playlist's tracks.
+    pub id: String,
+    /// The playlist's name.
+    pub title: String,
+    /// The owning channel, when known (flat search often omits it).
+    #[serde(default)]
+    pub uploader: String,
+}
+
 /// How playback repeats when a track ends.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepeatMode {

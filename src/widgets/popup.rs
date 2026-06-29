@@ -2,24 +2,26 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::text::Text;
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::Clear;
 
 use crate::theme::Theme;
 use crate::ui;
 
-/// Draw a centered `width`×`height` overlay with `title` and `body`.
-pub fn overlay(
+/// Draw a centered `width`×`height` titled panel, clearing what's behind it,
+/// and return the inner content [`Rect`]. Callers lay out their own body (a
+/// paragraph, or the multi-column help) inside this consistent overlay frame.
+pub fn panel_box(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,
     title: &str,
-    body: impl Into<Text<'static>>,
     width: u16,
     height: u16,
-) {
+) -> Rect {
     let rect = ui::centered(area, width, height);
     frame.render_widget(Clear, rect);
     let block = ui::panel(theme, title);
-    frame.render_widget(Paragraph::new(body).block(block), rect);
+    let inner = block.inner(rect);
+    frame.render_widget(block, rect);
+    inner
 }

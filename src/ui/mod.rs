@@ -28,21 +28,10 @@ use crate::models::Track;
 use crate::theme::Theme;
 use crate::utils;
 
-/// A comfortable maximum content width. Wider terminals get calm side margins
-/// rather than a stretched, sparse layout — the brief asks for a centered layout
-/// with generous spacing.
-const MAX_CONTENT_WIDTH: u16 = 100;
-
-/// The centered content column within `screen`.
+/// The content column. Uses the full terminal width — each screen still centers
+/// its own content, so wide terminals are filled rather than letterboxed.
 fn content_area(screen: Rect) -> Rect {
-    let width = screen.width.min(MAX_CONTENT_WIDTH);
-    let x = screen.x + screen.width.saturating_sub(width) / 2;
-    Rect {
-        x,
-        y: screen.y,
-        width,
-        height: screen.height,
-    }
+    screen
 }
 
 /// Draw the whole interface for one frame.

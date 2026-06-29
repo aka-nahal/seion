@@ -42,12 +42,18 @@ pub enum Action {
     PageUp,
     /// Move the selection down a page.
     PageDown,
+    /// Jump the selection to the first row.
+    SelectTop,
+    /// Jump the selection to the last row.
+    SelectBottom,
     /// Act on the current selection (play / open / confirm).
     Activate,
 
     // playback
     /// Pause or resume.
     TogglePlay,
+    /// Stop playback and let the screen fall quiet.
+    Stop,
     /// Next track.
     Next,
     /// Previous track.
@@ -60,6 +66,8 @@ pub enum Action {
     VolumeUp,
     /// Lower the volume.
     VolumeDown,
+    /// Mute / unmute (toggles volume to zero and back).
+    ToggleMute,
     /// Like / unlike the focused track.
     ToggleLike,
     /// Add the focused track to the queue.
@@ -80,6 +88,8 @@ pub enum Action {
     ToggleRain,
     /// Toggle the now-playing visualizer.
     ToggleVisualizer,
+    /// Cycle to the next colour theme.
+    CycleTheme,
 
     // text editing (search box)
     /// Insert a character.
@@ -120,6 +130,8 @@ pub fn resolve(key: KeyEvent, editing: bool) -> Option<Action> {
         KeyCode::Down => Some(Action::MoveDown),
         KeyCode::PageUp => Some(Action::PageUp),
         KeyCode::PageDown => Some(Action::PageDown),
+        KeyCode::Home => Some(Action::SelectTop),
+        KeyCode::End => Some(Action::SelectBottom),
         KeyCode::Left => Some(Action::SeekBackward),
         KeyCode::Right => Some(Action::SeekForward),
         KeyCode::Enter => Some(Action::Activate),
@@ -147,6 +159,9 @@ fn resolve_char(c: char) -> Option<Action> {
         'a' => Some(Action::Enqueue),
         'r' => Some(Action::CycleRepeat),
         'm' => Some(Action::ToggleShuffle),
+        'x' => Some(Action::ToggleMute),
+        't' => Some(Action::CycleTheme),
+        '.' => Some(Action::Stop),
         'd' => Some(Action::Download),
         'f' => Some(Action::FocusMode),
         'z' => Some(Action::ZenMode),
@@ -173,30 +188,63 @@ fn resolve_editing(key: KeyEvent) -> Option<Action> {
     }
 }
 
-/// The bindings, paired with a quiet description — shown in the help overlay.
-pub const HELP: &[(&str, &str)] = &[
-    ("/", "search"),
-    ("enter", "play · open"),
-    ("space", "pause · resume"),
-    ("j · k", "next · previous track"),
-    ("↑ · ↓", "move selection"),
-    ("← · →", "seek"),
-    ("+ · -", "volume"),
-    ("l", "like"),
-    ("a", "add to queue"),
-    ("r · m", "repeat · shuffle"),
-    ("d", "download"),
-    ("h", "home"),
-    ("b", "library"),
-    ("q", "queue"),
-    ("n", "now playing"),
-    ("p", "playlists"),
-    ("s", "settings"),
-    ("f · z", "focus · zen mode"),
-    ("w · v", "toggle rain · visualizer"),
-    ("?", "this help"),
-    ("esc", "back"),
-    ("ctrl+c", "quit"),
+/// A titled group of bindings, shown as one block in the help overlay.
+pub struct HelpSection {
+    /// The quiet heading (e.g. `"playback"`).
+    pub title: &'static str,
+    /// The `(key, description)` rows under it.
+    pub keys: &'static [(&'static str, &'static str)],
+}
+
+/// The bindings, grouped into calm sections — rendered as a two-column
+/// cheatsheet by the help overlay.
+pub const HELP_SECTIONS: &[HelpSection] = &[
+    HelpSection {
+        title: "playback",
+        keys: &[
+            ("space", "pause · resume"),
+            (".", "stop"),
+            ("j · k", "next · previous"),
+            ("← · →", "seek"),
+            ("+ · -", "volume"),
+            ("x", "mute"),
+            ("r · m", "repeat · shuffle"),
+        ],
+    },
+    HelpSection {
+        title: "navigate",
+        keys: &[
+            ("/", "search"),
+            ("/playlist", "search playlists"),
+            ("↑ · ↓", "move selection"),
+            ("home · end", "top · bottom"),
+            ("h · b", "home · library"),
+            ("q · n", "queue · now playing"),
+            ("p · s", "playlists · settings"),
+        ],
+    },
+    HelpSection {
+        title: "track",
+        keys: &[
+            ("enter", "play · open"),
+            ("l", "like"),
+            ("a", "add to queue"),
+            ("d", "download"),
+        ],
+    },
+    HelpSection {
+        title: "ambience",
+        keys: &[
+            ("f · z", "focus · zen"),
+            ("w", "idle rain"),
+            ("v", "visualizer"),
+            ("t", "cycle theme"),
+        ],
+    },
+    HelpSection {
+        title: "app",
+        keys: &[("?", "this help"), ("esc", "back"), ("ctrl+c", "quit")],
+    },
 ];
 
 #[cfg(test)]
@@ -229,5 +277,17 @@ mod tests {
         assert_eq!(resolve(key(KeyCode::Char('h')), true), Some(Action::InputChar('h')));
         assert_eq!(resolve(key(KeyCode::Enter), true), Some(Action::InputSubmit));
         assert_eq!(resolve(key(KeyCode::Esc), true), Some(Action::InputCancel));
+    }
+
+    #[test]
+    fn new_control_bindings() {
+        assert_eq!(resolve(key(KeyCode::Char('x')), false), Some(Action::ToggleMute));
+        assert_eq!(resolve(key(KeyCode::Char('.')), false), Some(Action::Stop));
+        assert_eq!(resolve(key(KeyCode::Char('t')), false), Some(Action::CycleTheme));
+        assert_eq!(resolve(key(KeyCode::Home), false), Some(Action::SelectTop));
+        assert_eq!(resolve(key(KeyCode::End), false), Some(Action::SelectBottom));
+        // Home/End still edit text when the search box is focused.
+        assert_eq!(resolve(key(KeyCode::Home), true), Some(Action::InputHome));
+        assert_eq!(resolve(key(KeyCode::End), true), Some(Action::InputEnd));
     }
 }

@@ -70,14 +70,30 @@ pub fn render_downloads(frame: &mut Frame, area: Rect, app: &mut App) {
     track_list::render(frame, area, &theme, "downloads", &app.downloads, &mut app.downloads_state, &opts);
 }
 
-/// Playlists — a quiet placeholder until playlist storage lands.
+/// Playlists — search YouTube playlists from here via the `/playlist` command;
+/// saved local playlists are still to come.
 pub fn render_playlists(frame: &mut Frame, area: Rect, app: &App) {
     let theme = &app.theme;
     let block = ui::panel(theme, "playlists");
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let message = Paragraph::new("no playlists yet — a calm place for them is coming")
-        .centered()
-        .style(Style::new().fg(theme.muted).add_modifier(Modifier::ITALIC));
-    frame.render_widget(message, inner);
+    let lines = vec![
+        Line::from(Span::styled(
+            "search YouTube playlists with  /playlist <query>",
+            Style::new().fg(theme.muted),
+        ))
+        .centered(),
+        Line::from(Span::styled(
+            "…or paste a playlist URL into search to load it",
+            Style::new().fg(theme.muted),
+        ))
+        .centered(),
+        Line::from(""),
+        Line::from(Span::styled(
+            "saved playlists are coming to this calm corner",
+            Style::new().fg(theme.muted).add_modifier(Modifier::ITALIC),
+        ))
+        .centered(),
+    ];
+    frame.render_widget(Paragraph::new(lines), inner);
 }

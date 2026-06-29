@@ -20,7 +20,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use crate::config::Config;
 use crate::database::Database;
 use crate::discord::Discord;
-use crate::models::Track;
+use crate::models::{Playlist, Track};
 use crate::player::{Player, PlayerEvent};
 use crate::theme::Theme;
 use crate::widgets::input::Input;
@@ -36,6 +36,28 @@ const TICKS_PER_SEC: u64 = 1000 / TICK_MS;
 const STATUS_TTL_TICKS: u64 = TICKS_PER_SEC * 4;
 /// How long after the last keystroke a debounced search fires (~0.5 seconds).
 const SEARCH_DEBOUNCE_TICKS: u64 = TICKS_PER_SEC / 2;
+/// How many tracks to pull when opening a playlist (playlists can be enormous).
+pub const PLAYLIST_LOAD_LIMIT: usize = 100;
+
+/// What the search box is currently looking for — plain tracks, or playlists
+/// (entered with the `/playlist` command prefix).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SearchKind {
+    /// Ordinary track search.
+    #[default]
+    Tracks,
+    /// Playlist search (`/playlist <query>`).
+    Playlists,
+}
+
+/// A YouTube link recognised in the search box, ready to load on Enter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PendingLink {
+    /// A playlist URL or id — Enter loads the whole playlist.
+    Playlist(String),
+    /// A single video URL — Enter plays just that track.
+    Video(String),
+}
 
 /// The screens of Seion. `Splash` is the opening breath; the rest are reachable
 /// by keyboard. Lyrics is opened from Now Playing.
@@ -123,6 +145,19 @@ pub enum AppEvent {
         query: String,
         result: Result<Vec<Track>, String>,
     },
+    /// A playlist search finished (same sequence-number staleness guard).
+    PlaylistsDone {
+        seq: u64,
+        result: Result<Vec<Playlist>, String>,
+    },
+    /// A playlist's tracks finished loading — play them, or append if `append`.
+    PlaylistOpened {
+        title: String,
+        append: bool,
+        result: Result<Vec<Track>, String>,
+    },
+    /// A single pasted video link finished resolving — play it.
+    TrackResolved { result: Result<Track, String> },
     /// A background task wants to show a status message.
     Status { text: String, error: bool },
     /// A periodic tick (~4 Hz) for animations and debounced search.
@@ -157,9 +192,14 @@ pub struct App {
 
     /// The search box contents.
     pub search: Input,
-    /// Current search results.
+    /// What the search box is looking for (tracks or playlists).
+    pub search_kind: SearchKind,
+    /// Current track search results.
     pub results: Vec<Track>,
-    /// Selection within the results.
+    /// Current playlist search results (shown when `search_kind` is `Playlists`).
+    pub playlists: Vec<Playlist>,
+    /// Selection within the results (shared by both result kinds — only one is
+    /// shown at a time).
     pub results_state: ListState,
     /// Whether a search is in flight.
     pub searching: bool,
@@ -227,7 +267,9 @@ impl App {
             overlay: None,
             editing: false,
             search: Input::default(),
+            search_kind: SearchKind::default(),
             results: Vec::new(),
+            playlists: Vec::new(),
             results_state: ListState::default(),
             searching: false,
             search_seq: 0,
@@ -290,6 +332,11 @@ impl App {
             AppEvent::Input(ev) => self.handle_input(ev),
             AppEvent::Player(pe) => self.handle_player(pe),
             AppEvent::SearchDone { seq, query, result } => self.handle_search_done(seq, query, result),
+            AppEvent::PlaylistsDone { seq, result } => self.handle_playlists_done(seq, result),
+            AppEvent::PlaylistOpened { title, append, result } => {
+                self.handle_playlist_opened(title, append, result)
+            }
+            AppEvent::TrackResolved { result } => self.handle_track_resolved(result),
             AppEvent::Status { text, error } => self.set_status(text, error),
             AppEvent::Tick => self.tick(),
         }
@@ -366,6 +413,65 @@ impl App {
         }
     }
 
+    /// Apply a finished playlist search, ignoring stale results.
+    fn handle_playlists_done(&mut self, seq: u64, result: Result<Vec<Playlist>, String>) {
+        if seq != self.search_seq {
+            return; // superseded by a newer search
+        }
+        self.searching = false;
+        match result {
+            Ok(playlists) => {
+                self.playlists = playlists;
+                self.results_state.select(if self.playlists.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                });
+            }
+            Err(e) => self.set_status(format!("playlist search failed — {e}"), true),
+        }
+    }
+
+    /// A playlist's tracks arrived — play them, or append to the queue.
+    fn handle_playlist_opened(
+        &mut self,
+        title: String,
+        append: bool,
+        result: Result<Vec<Track>, String>,
+    ) {
+        match result {
+            Ok(tracks) if !tracks.is_empty() => {
+                let count = tracks.len();
+                let name = if title.is_empty() {
+                    "playlist".to_string()
+                } else {
+                    utils::truncate(&title, 40)
+                };
+                if append {
+                    self.player.enqueue_all(tracks);
+                    self.set_status(format!("queued {name} — {count} tracks"), false);
+                } else {
+                    self.player.play_from(tracks, 0);
+                    self.set_status(format!("playing {name} — {count} tracks"), false);
+                }
+            }
+            Ok(_) => self.set_status("that playlist was empty", false),
+            Err(e) => self.set_status(format!("could not open playlist — {e}"), true),
+        }
+    }
+
+    /// A pasted single-video link resolved — play it as a one-track queue.
+    fn handle_track_resolved(&mut self, result: Result<Track, String>) {
+        match result {
+            Ok(track) => {
+                let title = track.title.clone();
+                self.player.play_from(vec![track], 0);
+                self.set_status(format!("playing — {}", utils::truncate(&title, 40)), false);
+            }
+            Err(e) => self.set_status(format!("could not load track — {e}"), true),
+        }
+    }
+
     /// Periodic housekeeping: animations, status expiry, debounced search.
     fn tick(&mut self) {
         self.tick_count = self.tick_count.wrapping_add(1);
@@ -402,18 +508,35 @@ impl App {
         self.search_dirty_at = self.tick_count;
     }
 
-    /// Kick off a search for the current box contents.
+    /// Kick off a search for the current box contents. A `/playlist <query>`
+    /// prefix searches playlists instead of tracks.
     fn run_search(&mut self) {
         // Whatever scheduled this (debounce, Enter), the pending search is now
         // being serviced — clear the flag so it can't fire again redundantly.
         self.search_dirty = false;
-        let query = self.search.text().trim().to_string();
+
+        let raw = self.search.text().trim().to_string();
+        let (kind, query) = match parse_playlist_command(&raw) {
+            Some(rest) => (SearchKind::Playlists, rest),
+            None => (SearchKind::Tracks, raw),
+        };
+        self.search_kind = kind;
+
         if query.is_empty() {
             self.results.clear();
+            self.playlists.clear();
             self.results_state.select(None);
             self.searching = false;
             return;
         }
+
+        // A pasted link (playlist or video) isn't a search term — don't waste a
+        // yt-dlp round trip on it; the search view prompts to load it with Enter.
+        if youtube::playlist_id_from(&query).is_some() || youtube::video_id_from(&query).is_some() {
+            self.searching = false;
+            return;
+        }
+
         self.search_seq += 1;
         let seq = self.search_seq;
         self.searching = true;
@@ -421,12 +544,36 @@ impl App {
         let tx = self.tx.clone();
         let ytdlp = self.config.ytdlp_path.clone();
         let limit = self.config.search_limit;
-        tokio::spawn(async move {
-            let result = youtube::search(&ytdlp, &query, limit)
-                .await
-                .map_err(|e| e.to_string());
-            let _ = tx.send(AppEvent::SearchDone { seq, query, result });
-        });
+        match kind {
+            SearchKind::Tracks => {
+                tokio::spawn(async move {
+                    let result = youtube::search(&ytdlp, &query, limit)
+                        .await
+                        .map_err(|e| e.to_string());
+                    let _ = tx.send(AppEvent::SearchDone { seq, query, result });
+                });
+            }
+            SearchKind::Playlists => {
+                tokio::spawn(async move {
+                    let result = youtube::search_playlists(&ytdlp, &query, limit)
+                        .await
+                        .map_err(|e| e.to_string());
+                    let _ = tx.send(AppEvent::PlaylistsDone { seq, result });
+                });
+            }
+        }
+    }
+
+    /// If the search box holds a YouTube link, what Enter would load — a playlist
+    /// or a single video. Lets the search view show a load prompt and lets submit
+    /// act on it. A playlist takes precedence (a watch link can carry both).
+    pub fn pending_link(&self) -> Option<PendingLink> {
+        let raw = self.search.text().trim();
+        let candidate = parse_playlist_command(raw).unwrap_or_else(|| raw.to_string());
+        if let Some(id) = youtube::playlist_id_from(&candidate) {
+            return Some(PendingLink::Playlist(id));
+        }
+        youtube::video_id_from(&candidate).map(PendingLink::Video)
     }
 
     /// Set the transient status line.
@@ -436,6 +583,20 @@ impl App {
             error,
             created_tick: self.tick_count,
         });
+    }
+}
+
+/// Recognise the `/playlist <query>` search command, returning the trimmed
+/// query (which may be empty for a bare `/playlist`). Returns `None` for any
+/// other text, so ordinary searches are untouched.
+fn parse_playlist_command(text: &str) -> Option<String> {
+    let rest = text.strip_prefix("/playlist")?;
+    // Require the prefix to end at a word boundary so "/playlists" (a literal
+    // search) isn't swallowed, while a bare "/playlist" still counts.
+    if rest.is_empty() || rest.starts_with(char::is_whitespace) {
+        Some(rest.trim().to_string())
+    } else {
+        None
     }
 }
 
@@ -497,4 +658,27 @@ fn spawn_ticker(tx: UnboundedSender<AppEvent>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_playlist_command;
+
+    #[test]
+    fn playlist_command_extracts_query() {
+        assert_eq!(parse_playlist_command("/playlist lofi"), Some("lofi".to_string()));
+        assert_eq!(
+            parse_playlist_command("/playlist  rainy   jazz  "),
+            Some("rainy   jazz".to_string())
+        );
+        assert_eq!(parse_playlist_command("/playlist"), Some(String::new()));
+    }
+
+    #[test]
+    fn non_playlist_text_is_left_alone() {
+        assert_eq!(parse_playlist_command("lofi beats"), None);
+        assert_eq!(parse_playlist_command("/play something"), None);
+        // A word that merely starts with the prefix must not be swallowed.
+        assert_eq!(parse_playlist_command("/playlists of mine"), None);
+    }
 }

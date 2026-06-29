@@ -5,10 +5,13 @@
 
 use ratatui::widgets::ListState;
 
-use super::{App, AppEvent, LIBRARY_ITEMS, Overlay, SETTINGS_ITEMS, View};
+use super::{
+    App, AppEvent, LIBRARY_ITEMS, Overlay, PLAYLIST_LOAD_LIMIT, PendingLink, SETTINGS_ITEMS,
+    SearchKind, View,
+};
 use crate::commands::Action;
 use crate::models::Track;
-use crate::{downloads, utils};
+use crate::{downloads, utils, youtube};
 
 impl App {
     /// Apply an action to the application state.
@@ -30,9 +33,15 @@ impl App {
             MoveDown => self.move_selection(1),
             PageUp => self.move_selection(-10),
             PageDown => self.move_selection(10),
+            SelectTop => self.select_edge(true),
+            SelectBottom => self.select_edge(false),
             Activate => self.activate(),
 
             TogglePlay => self.player.toggle_pause(),
+            Stop => {
+                self.player.stop();
+                self.set_status("stopped", false);
+            }
             Next => self.player.next(),
             Previous => self.player.previous(),
             SeekForward => self.player.seek_relative(5.0),
@@ -45,8 +54,14 @@ impl App {
                 self.player.volume_down();
                 self.persist_volume();
             }
+            ToggleMute => {
+                self.player.toggle_mute();
+                self.persist_volume();
+                let muted = self.player.is_muted();
+                self.set_status(if muted { "muted" } else { "unmuted" }, false);
+            }
             ToggleLike => self.toggle_like(),
-            Enqueue => self.enqueue_selected(),
+            Enqueue => self.enqueue_action(),
             CycleRepeat => {
                 self.player.cycle_repeat();
                 let glyph = self.player.repeat.glyph();
@@ -82,6 +97,12 @@ impl App {
                 let _ = self.config.save();
                 let on = self.config.visualizer;
                 self.set_status(if on { "visualizer on" } else { "visualizer off" }, false);
+            }
+            CycleTheme => {
+                self.theme = self.theme.next();
+                self.config.theme = self.theme.key();
+                let _ = self.config.save();
+                self.set_status(format!("theme — {}", self.theme.name), false);
             }
 
             InputChar(c) => {
@@ -178,10 +199,24 @@ impl App {
         }
     }
 
+    /// Jump the active list's selection to the first (`top`) or last row.
+    fn select_edge(&mut self, top: bool) {
+        if let Some((len, state)) = self.active_selection() {
+            if len == 0 {
+                return;
+            }
+            state.select(Some(if top { 0 } else { len - 1 }));
+        }
+    }
+
     /// The list length and selection state for the current view, if it has one.
     fn active_selection(&mut self) -> Option<(usize, &mut ListState)> {
+        let search_len = match self.search_kind {
+            SearchKind::Tracks => self.results.len(),
+            SearchKind::Playlists => self.playlists.len(),
+        };
         match self.view {
-            View::Search => Some((self.results.len(), &mut self.results_state)),
+            View::Search => Some((search_len, &mut self.results_state)),
             View::Liked => Some((self.liked.len(), &mut self.liked_state)),
             View::Home | View::History => Some((self.history.len(), &mut self.history_state)),
             View::Downloads => Some((self.downloads.len(), &mut self.downloads_state)),
@@ -198,6 +233,8 @@ impl App {
             state.selected().and_then(|i| list.get(i).cloned())
         };
         match self.view {
+            // A playlist row isn't a track — like/enqueue/download don't apply.
+            View::Search if self.search_kind == SearchKind::Playlists => None,
             View::Search => pick(&self.results, &self.results_state),
             View::Liked => pick(&self.liked, &self.liked_state),
             View::Home | View::History => pick(&self.history, &self.history_state),
@@ -213,7 +250,12 @@ impl App {
     /// Act on the current selection.
     fn activate(&mut self) {
         match self.view {
-            View::Search => self.play_selected(self.results.clone(), self.results_state.selected()),
+            View::Search => match self.search_kind {
+                SearchKind::Tracks => {
+                    self.play_selected(self.results.clone(), self.results_state.selected())
+                }
+                SearchKind::Playlists => self.open_selected_playlist(false),
+            },
             View::Liked => self.play_selected(self.liked.clone(), self.liked_state.selected()),
             View::Home | View::History => {
                 self.play_selected(self.history.clone(), self.history_state.selected())
@@ -259,6 +301,55 @@ impl App {
         self.set_status(format!("playing — {}", utils::truncate(&title, 40)), false);
     }
 
+    /// Open the selected playlist search result (Enter plays, `a` appends).
+    fn open_selected_playlist(&mut self, append: bool) {
+        let Some(playlist) = self
+            .results_state
+            .selected()
+            .and_then(|i| self.playlists.get(i).cloned())
+        else {
+            return;
+        };
+        self.open_playlist_by_id(playlist.id, playlist.title, append);
+    }
+
+    /// Fetch a playlist's tracks off-thread by its id, then play them — or append
+    /// them to the queue when `append` — back in [`App::handle_playlist_opened`].
+    /// `name_hint` is shown while loading and used as a fallback title.
+    fn open_playlist_by_id(&mut self, id: String, name_hint: String, append: bool) {
+        let verb = if append { "queuing" } else { "loading" };
+        let loading = if name_hint.is_empty() {
+            format!("{verb} playlist …")
+        } else {
+            format!("{verb} {} …", utils::truncate(&name_hint, 40))
+        };
+        self.set_status(loading, false);
+
+        let tx = self.tx.clone();
+        let ytdlp = self.config.ytdlp_path.clone();
+        tokio::spawn(async move {
+            let (title, result) = match youtube::playlist_tracks(&ytdlp, &id, PLAYLIST_LOAD_LIMIT).await {
+                // Prefer the playlist's real title; fall back to the hint.
+                Ok((name, tracks)) => (if name.is_empty() { name_hint } else { name }, Ok(tracks)),
+                Err(e) => (name_hint, Err(e.to_string())),
+            };
+            let _ = tx.send(AppEvent::PlaylistOpened { title, append, result });
+        });
+    }
+
+    /// Resolve a pasted single-video link off-thread, then play it.
+    fn play_video_by_id(&mut self, id: String) {
+        self.set_status("loading track …", false);
+        let tx = self.tx.clone();
+        let ytdlp = self.config.ytdlp_path.clone();
+        tokio::spawn(async move {
+            let result = youtube::fetch_track(&ytdlp, &id)
+                .await
+                .map_err(|e| e.to_string());
+            let _ = tx.send(AppEvent::TrackResolved { result });
+        });
+    }
+
     // --- track actions -----------------------------------------------------
 
     /// Like or unlike the focused (or playing) track.
@@ -279,6 +370,16 @@ impl App {
 
         self.liked = self.db.liked().unwrap_or_default();
         reselect(&mut self.liked_state, self.liked.len());
+    }
+
+    /// Handle the "add to queue" key: a focused playlist result appends the whole
+    /// playlist; otherwise the focused track is appended.
+    fn enqueue_action(&mut self) {
+        if self.view == View::Search && self.search_kind == SearchKind::Playlists {
+            self.open_selected_playlist(true);
+        } else {
+            self.enqueue_selected();
+        }
     }
 
     /// Add the focused track to the queue.
@@ -328,10 +429,22 @@ impl App {
 
     // --- search editing ----------------------------------------------------
 
-    /// Submit the search and move focus to the results.
+    /// Submit the search and move focus to the results. If the box holds a
+    /// YouTube link (optionally after `/playlist`), load it directly instead of
+    /// searching — a playlist loads & plays, a video plays just that track.
     fn submit_search(&mut self) {
         self.editing = false;
-        self.run_search();
+        match self.pending_link() {
+            Some(PendingLink::Playlist(id)) => {
+                self.search.clear();
+                self.open_playlist_by_id(id, String::new(), false);
+            }
+            Some(PendingLink::Video(id)) => {
+                self.search.clear();
+                self.play_video_by_id(id);
+            }
+            None => self.run_search(),
+        }
     }
 
     /// Cancel editing — go back if the box is empty, else just defocus it.

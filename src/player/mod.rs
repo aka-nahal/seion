@@ -113,6 +113,9 @@ pub struct Player {
     cache: StreamCache,
     rng: utils::Rng,
     retry_used: bool,
+    /// True while muted; remembers the pre-mute volume to restore.
+    muted: bool,
+    premute_volume: u8,
 
     /// Live playback snapshot.
     pub state: PlayerState,
@@ -155,6 +158,8 @@ impl Player {
             cache: StreamCache::default(),
             rng: utils::Rng::from_clock(),
             retry_used: false,
+            muted: false,
+            premute_volume: state.volume,
             state,
             queue: Vec::new(),
             queue_pos: None,
@@ -197,6 +202,21 @@ impl Player {
         self.queue.push(track.clone());
         if !self.state.has_track() {
             self.queue_pos = Some(self.queue.len() - 1);
+            self.start(track);
+        }
+    }
+
+    /// Append many tracks to the end of the queue, starting the first of them if
+    /// nothing is playing. Used to add a whole playlist without replacing it.
+    pub fn enqueue_all(&mut self, tracks: Vec<Track>) {
+        if tracks.is_empty() {
+            return;
+        }
+        let start = self.queue.len();
+        self.queue.extend(tracks);
+        if !self.state.has_track() {
+            self.queue_pos = Some(start);
+            let track = self.queue[start].clone();
             self.start(track);
         }
     }
@@ -368,12 +388,32 @@ impl Player {
 
     /// Nudge the volume up by five.
     pub fn volume_up(&mut self) {
+        self.muted = false;
         self.set_volume(self.state.volume.saturating_add(5));
     }
 
     /// Nudge the volume down by five.
     pub fn volume_down(&mut self) {
+        self.muted = false;
         self.set_volume(self.state.volume.saturating_sub(5));
+    }
+
+    /// Mute or unmute, remembering the volume to restore on unmute.
+    pub fn toggle_mute(&mut self) {
+        if self.muted {
+            self.muted = false;
+            let restore = self.premute_volume.max(5);
+            self.set_volume(restore);
+        } else {
+            self.muted = true;
+            self.premute_volume = self.state.volume;
+            self.set_volume(0);
+        }
+    }
+
+    /// Whether sound is currently muted.
+    pub fn is_muted(&self) -> bool {
+        self.muted
     }
 
     /// Cycle repeat mode off → all → one.

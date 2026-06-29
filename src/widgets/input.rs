@@ -73,6 +73,12 @@ impl Input {
         self.cursor = self.len();
     }
 
+    /// Clear the field, returning the cursor to the start.
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.cursor = 0;
+    }
+
     /// Byte offset of character index `char_idx` (clamped to the string length).
     fn byte_at(&self, char_idx: usize) -> usize {
         self.text

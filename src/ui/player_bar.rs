@@ -107,7 +107,14 @@ fn controls_line(app: &App) -> Line<'static> {
     let separator = || Span::styled("   ", muted);
 
     let mut spans = vec![
-        Span::styled(format!("vol {}", app.player.state.volume), muted),
+        Span::styled(
+            if app.player.is_muted() {
+                "muted".to_string()
+            } else {
+                format!("vol {}", app.player.state.volume)
+            },
+            if app.player.is_muted() { accent } else { muted },
+        ),
         separator(),
         Span::styled(
             app.player.repeat.glyph().to_string(),
