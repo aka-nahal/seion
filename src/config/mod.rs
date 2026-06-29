@@ -30,6 +30,13 @@ pub struct Config {
     pub rain_on_idle: bool,
     /// Breathe a soft visualizer band behind the now-playing screen.
     pub visualizer: bool,
+    /// Share the current track on Discord as Rich Presence.
+    pub discord_presence: bool,
+    /// Discord application id used for Rich Presence. Defaults to Seion's own app
+    /// so presence works out of the box; set your own (from
+    /// <https://discord.com/developers/applications>) for a custom name and art,
+    /// or empty to leave the integration dormant.
+    pub discord_client_id: String,
 }
 
 impl Default for Config {
@@ -43,6 +50,8 @@ impl Default for Config {
             daily_quote: true,
             rain_on_idle: true,
             visualizer: true,
+            discord_presence: true,
+            discord_client_id: crate::discord::DEFAULT_CLIENT_ID.to_string(),
         }
     }
 }

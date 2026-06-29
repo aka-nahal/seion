@@ -17,6 +17,7 @@
 //!                │                 │
 //!                ├── youtube (yt-dlp search / stream resolution)
 //!                ├── database (sqlite: liked, history)
+//!                ├── discord (rich presence over ipc)
 //!                ├── config (toml)  ·  cache (stream urls)
 //!                └── theme · widgets · commands · utils
 //! ```
@@ -26,6 +27,7 @@ mod cache;
 mod commands;
 mod config;
 mod database;
+mod discord;
 mod downloads;
 mod lyrics;
 mod models;

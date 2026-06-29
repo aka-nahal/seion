@@ -368,12 +368,31 @@ impl App {
                 self.set_status(if on { "visualizer on" } else { "visualizer off" }, false);
             }
             3 => {
+                let on = !self.config.discord_presence;
+                self.config.discord_presence = on;
+                let _ = self.config.save();
+                self.discord.set_enabled(on);
+                if on {
+                    self.discord.sync(&self.player.state);
+                } else {
+                    self.discord.clear();
+                }
+                let note = if !self.discord.is_configured() {
+                    "discord presence — set discord_client_id in config.toml"
+                } else if on {
+                    "discord presence on"
+                } else {
+                    "discord presence off"
+                };
+                self.set_status(note, false);
+            }
+            4 => {
                 self.config.daily_quote = !self.config.daily_quote;
                 let _ = self.config.save();
                 let on = self.config.daily_quote;
                 self.set_status(if on { "daily quote on" } else { "daily quote off" }, false);
             }
-            4 => {
+            5 => {
                 let backend = self.config.mpv_path.clone();
                 let note = if self.player.is_available() {
                     format!("audio backend — {backend}")
@@ -382,7 +401,7 @@ impl App {
                 };
                 self.set_status(note, false);
             }
-            5 => {
+            6 => {
                 let next = match self.config.search_limit {
                     n if n < 20 => 20,
                     n if n < 30 => 30,

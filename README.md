@@ -31,6 +31,7 @@ track plays, a soft visualizer breathes quietly behind the now-playing screen.
 |------|---------|-----------|
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | search + stream/download resolution | yes (for anything online) |
 | [mpv](https://mpv.io) | audio playback | yes (for sound — Seion runs without it, as a quiet display) |
+| [Discord](https://discord.com) | Rich Presence — show what you're listening to | optional |
 | Rust ≥ 1.88 (edition 2024) | building | to build from source |
 
 A terminal with **24-bit ("truecolor")** support is recommended — Windows
@@ -98,13 +99,33 @@ Nine calm presets, cycled from **settings** (or set `theme` in the config):
 saturated; none are loud. The settings screen shows a live swatch of the palette
 as you cycle, and the same colours flow through the visualizer.
 
+## Discord Rich Presence
+
+With Discord running, Seion shows the song you're listening to — title, artist,
+cover art, and a live progress bar — published over Discord's local IPC. It works
+out of the box (Seion ships with its own Discord application), and you can toggle
+it any time from **settings** (`discord presence`).
+
+To show it under your own application name and art instead, create an app in the
+[Discord Developer Portal](https://discord.com/developers/applications) and put
+its **Application ID** in `config.toml`:
+
+```toml
+discord_presence = true
+discord_client_id = "0000000000000000000"   # your Application ID, or "" to disable
+```
+
+If Discord isn't running it simply waits and connects when it is. It never blocks
+playback and degrades quietly, exactly like mpv.
+
 ## Configuration & data
 
 Stored under your platform's standard directories (via `directories`):
 
 - **config** — `config.toml` (theme, volume, search result count, mpv/yt-dlp
-  paths, idle rain, visualizer, daily quote). Hand-editable; missing keys fall
-  back to defaults, malformed files fall back entirely.
+  paths, idle rain, visualizer, daily quote, Discord presence + application id).
+  Hand-editable; missing keys fall back to defaults, malformed files fall back
+  entirely.
 - **data** — `seion.db` (SQLite: liked songs + history) and `downloads/`
   (offline audio, played directly like any other track).
 
@@ -119,6 +140,7 @@ is spawned and reports back as events.
                │                 │
                ├─ youtube   (yt-dlp: search + stream resolution)
                ├─ database  (sqlite: liked, history)
+               ├─ discord   (rich presence over local IPC)
                ├─ config (toml) · cache (resolved stream urls, TTL)
                └─ theme · widgets · commands · utils
 ```
@@ -133,6 +155,7 @@ src/
   database/   sqlite persistence
   cache/      stream-url TTL cache
   config/     toml config
+  discord/    rich presence over local IPC
   downloads/  offline audio
   lyrics/     (placeholder — no provider in this build)
   theme/      the palette and presets
@@ -145,8 +168,9 @@ src/
 
 The calm core is complete and working: splash, search, playback, queue,
 liked/history, downloads & offline playback, now-playing with a soft visualizer,
-lyrics view, settings, nine themes, focus/zen modes, and idle rain. Playlists and
-a remote lyrics provider are intentionally left as quiet placeholders.
+lyrics view, settings, nine themes, focus/zen modes, idle rain, and optional
+Discord Rich Presence. Playlists and a remote lyrics provider are intentionally
+left as quiet placeholders.
 
 ## License
 

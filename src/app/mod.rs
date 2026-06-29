@@ -19,6 +19,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use crate::config::Config;
 use crate::database::Database;
+use crate::discord::Discord;
 use crate::models::Track;
 use crate::player::{Player, PlayerEvent};
 use crate::theme::Theme;
@@ -104,6 +105,7 @@ pub const SETTINGS_ITEMS: &[&str] = &[
     "theme",
     "idle rain",
     "visualizer",
+    "discord presence",
     "daily quote",
     "audio backend",
     "search results",
@@ -139,6 +141,8 @@ pub struct App {
     pub db: Database,
     /// Playback controller.
     pub player: Player,
+    /// Discord Rich Presence (dormant unless configured).
+    pub discord: Discord,
     /// For spawned tasks to report back.
     tx: UnboundedSender<AppEvent>,
 
@@ -205,6 +209,7 @@ impl App {
         let db = Database::open().or_else(|_| Database::in_memory())?;
         let (tx, rx) = mpsc::unbounded_channel();
         let player = Player::launch(&config, tx.clone());
+        let discord = Discord::launch(&config);
 
         let liked = db.liked().unwrap_or_default();
         let history = db.history(100).unwrap_or_default();
@@ -215,6 +220,7 @@ impl App {
             theme,
             db,
             player,
+            discord,
             tx,
             view: View::Splash,
             previous_view: View::Home,
@@ -265,11 +271,15 @@ impl App {
                 Some(event) => self.handle_event(event),
                 None => break,
             }
+            // Reconcile Discord with playback after each event. The handle
+            // de-dupes, so this is a cheap no-op unless something changed.
+            self.discord.sync(&self.player.state);
         }
 
         // Persist the final volume (and anything else in memory) on the way out.
         self.config.volume = self.player.state.volume;
         let _ = self.config.save();
+        self.discord.shutdown();
         self.player.shutdown();
         Ok(())
     }

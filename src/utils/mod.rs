@@ -46,6 +46,15 @@ pub fn project_dirs() -> Option<ProjectDirs> {
     ProjectDirs::from("", "", "seion")
 }
 
+/// The current wall-clock time as Unix epoch milliseconds. Used for the Discord
+/// presence timestamps; falls back to `0` if the clock is somehow before 1970.
+pub fn now_unix_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 /// Linearly interpolate between two truecolor values (`t` clamped to `0..=1`).
 ///
 /// Used for the gentle splash fade-in. Non-`Rgb` colours fall through to `to`.

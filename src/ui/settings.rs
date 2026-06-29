@@ -25,11 +25,19 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         format!("{}  (not found)", app.config.mpv_path)
     };
 
+    // The toggle reads on/off, with a gentle nudge when no application id is set.
+    let discord = if app.config.discord_client_id.trim().is_empty() {
+        format!("{}  (set client id)", on_off(app.config.discord_presence))
+    } else {
+        on_off(app.config.discord_presence)
+    };
+
     // Order must match `crate::app::SETTINGS_ITEMS`.
-    let rows: [(&str, String); 6] = [
+    let rows: [(&str, String); 7] = [
         ("theme", theme.name.to_string()),
         ("idle rain", on_off(app.config.rain_on_idle)),
         ("visualizer", on_off(app.config.visualizer)),
+        ("discord presence", discord),
         ("daily quote", on_off(app.config.daily_quote)),
         ("audio backend", backend),
         ("search results", app.config.search_limit.to_string()),
