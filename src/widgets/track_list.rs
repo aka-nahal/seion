@@ -2,10 +2,13 @@
 //! colour identical across search, library, queue and home.
 
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Margin, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{HighlightSpacing, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{
+    HighlightSpacing, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+    ScrollbarState,
+};
 
 use crate::models::Track;
 use crate::theme::Theme;
@@ -41,12 +44,33 @@ pub fn render(
     if tracks.is_empty() {
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        let message = Paragraph::new(opts.empty)
-            .centered()
-            .style(Style::new().fg(theme.muted).add_modifier(Modifier::ITALIC));
-        frame.render_widget(message, inner);
+        // A small, still motif rests above the message so an empty corner feels
+        // intentional and calm rather than simply blank.
+        let lines = vec![
+            Line::from(Span::styled(
+                "❀",
+                Style::new().fg(theme.secondary).add_modifier(Modifier::DIM),
+            ))
+            .centered(),
+            Line::from(""),
+            Line::from(Span::styled(
+                opts.empty,
+                Style::new().fg(theme.muted).add_modifier(Modifier::ITALIC),
+            ))
+            .centered(),
+        ];
+        let center = ui::centered(inner, inner.width, lines.len() as u16);
+        frame.render_widget(Paragraph::new(lines).centered(), center);
         return;
     }
+
+    // A quiet position indicator in the title: "history  ·  12/100".
+    let titled = match state.selected() {
+        Some(i) => format!("{title}  ·  {}/{}", i + 1, tracks.len()),
+        None => format!("{title}  ·  {}", tracks.len()),
+    };
+    let block = ui::panel(theme, &titled);
+    let inner = block.inner(area);
 
     let items: Vec<ListItem> = tracks
         .iter()
@@ -66,6 +90,26 @@ pub fn render(
         .highlight_spacing(HighlightSpacing::Always);
 
     frame.render_stateful_widget(list, area, state);
+
+    // A faint scrollbar, drawn only when the list overflows its visible rows. It
+    // rides the right border (using the same soft glyph) so it reads as part of
+    // the frame rather than an added element.
+    if tracks.len() > inner.height as usize {
+        let mut scroll_state = ScrollbarState::new(tracks.len())
+            .position(state.selected().unwrap_or_else(|| state.offset()));
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_symbol(Some("│"))
+            .thumb_symbol("█")
+            .track_style(Style::new().fg(ui::border_color(theme)))
+            .thumb_style(Style::new().fg(theme.muted));
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(Margin { vertical: 1, horizontal: 0 }),
+            &mut scroll_state,
+        );
+    }
 }
 
 /// Build the single styled line for one track.

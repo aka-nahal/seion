@@ -110,7 +110,7 @@ fn titled_block(theme: &Theme, title: &str) -> Block<'static> {
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(border_color(theme)))
-        .style(Style::new().bg(theme.background).fg(theme.text));
+        .style(Style::new().bg(panel_bg(theme)).fg(theme.text));
     if title.is_empty() {
         block
     } else {
@@ -127,9 +127,18 @@ pub fn border_color(theme: &Theme) -> Color {
     utils::lerp_color(theme.background, theme.muted, 0.4)
 }
 
-/// The gentle wash behind a selected list row.
+/// The gentle lift behind panels and the player bar — a hair above the
+/// background so surfaces read as raised rather than flat. Falls back to the
+/// background itself if a theme leaves `panel` unset (it never is, but this
+/// keeps the intent explicit).
+pub fn panel_bg(theme: &Theme) -> Color {
+    theme.panel
+}
+
+/// The gentle wash behind a selected list row. Lerped from the panel surface so
+/// the highlight still lifts on the raised panel background.
 pub fn selection_bg(theme: &Theme) -> Color {
-    utils::lerp_color(theme.background, theme.selection, 0.45)
+    utils::lerp_color(panel_bg(theme), theme.selection, 0.45)
 }
 
 /// A colour along the theme's gentle spectrum — `secondary` at the foot,

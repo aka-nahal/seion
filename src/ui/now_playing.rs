@@ -47,7 +47,7 @@ pub fn render_zen(frame: &mut Frame, area: Rect, app: &App) {
     let centered = ui::centered(info_area, info_area.width, height);
     frame.render_widget(Paragraph::new(lines).centered(), centered);
 
-    render_progress(frame, progress_area, theme, state);
+    render_progress(frame, progress_area, theme, state, app.config.progress_remaining);
     visualizer::render(frame, viz_area, app);
 }
 
@@ -73,7 +73,7 @@ fn render_with_visualizer(frame: &mut Frame, area: Rect, app: &App) {
     .areas(area);
 
     frame.render_widget(Paragraph::new(lines).centered(), info_area);
-    render_progress(frame, progress_area, theme, state);
+    render_progress(frame, progress_area, theme, state, app.config.progress_remaining);
     visualizer::render(frame, viz_area, app);
 }
 
@@ -98,7 +98,7 @@ fn render_calm(frame: &mut Frame, area: Rect, app: &App) {
     .areas(center);
 
     frame.render_widget(Paragraph::new(lines).centered(), text_area);
-    render_progress(frame, progress_area, theme, state);
+    render_progress(frame, progress_area, theme, state, app.config.progress_remaining);
 }
 
 /// The centered title / artist / album lines (or a quiet "nothing playing").
@@ -144,11 +144,11 @@ fn info_lines(theme: &Theme, state: &PlayerState) -> Vec<Line<'static>> {
 
 /// Draw the progress line, capped to a calm width and centered, but only when a
 /// track is actually loaded.
-fn render_progress(frame: &mut Frame, area: Rect, theme: &Theme, state: &PlayerState) {
+fn render_progress(frame: &mut Frame, area: Rect, theme: &Theme, state: &PlayerState, remaining: bool) {
     if !state.has_track() || area.height == 0 {
         return;
     }
     let width = area.width.min(72);
     let line = ui::centered(area, width, 1);
-    progress::render(frame, line, theme, state.position, state.duration);
+    progress::render(frame, line, theme, state.position, state.duration, remaining);
 }

@@ -248,6 +248,100 @@ impl Theme {
     pub fn key(&self) -> String {
         self.name.replace(' ', "_")
     }
+
+    /// Adapt the palette to the terminal's colour depth. On a 24-bit
+    /// ("truecolor") terminal this is the identity — the RGB palette is used as
+    /// written. When `truecolor` is false every colour is mapped to the nearest
+    /// entry in the 256-colour xterm palette (`Color::Indexed`), so the muted
+    /// look degrades in a controlled way rather than being left to the
+    /// terminal's own (often harsher) RGB approximation. The `name` is kept, so
+    /// cycling and config round-tripping still work on an adapted theme.
+    pub fn adapt(self, truecolor: bool) -> Self {
+        if truecolor {
+            return self;
+        }
+        let d = degrade;
+        Self {
+            name: self.name,
+            background: d(self.background),
+            surface: d(self.surface),
+            panel: d(self.panel),
+            text: d(self.text),
+            muted: d(self.muted),
+            accent: d(self.accent),
+            secondary: d(self.secondary),
+            highlight: d(self.highlight),
+            selection: d(self.selection),
+            success: d(self.success),
+            error: d(self.error),
+        }
+    }
+}
+
+/// Map a colour to the nearest xterm-256 palette entry. Non-RGB colours (already
+/// indexed or named) are returned unchanged.
+fn degrade(color: Color) -> Color {
+    let Color::Rgb(r, g, b) = color else {
+        return color;
+    };
+    Color::Indexed(nearest_256(r, g, b))
+}
+
+/// The six rung values of the 6×6×6 colour cube used by the xterm-256 palette.
+const CUBE_STEPS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+
+/// Index (and snapped value) of the nearest cube rung to `v`.
+fn nearest_cube_step(v: u8) -> (u8, u8) {
+    let mut best = 0usize;
+    let mut best_dist = u16::MAX;
+    for (i, &step) in CUBE_STEPS.iter().enumerate() {
+        let dist = (step as i16 - v as i16).unsigned_abs();
+        if dist < best_dist {
+            best_dist = dist;
+            best = i;
+        }
+    }
+    (best as u8, CUBE_STEPS[best])
+}
+
+/// Squared euclidean distance between two RGB triples.
+fn rgb_dist(a: (u8, u8, u8), b: (u8, u8, u8)) -> u32 {
+    let d = |x: u8, y: u8| {
+        let v = x as i32 - y as i32;
+        (v * v) as u32
+    };
+    d(a.0, b.0) + d(a.1, b.1) + d(a.2, b.2)
+}
+
+/// The nearest xterm-256 index for an RGB colour, choosing between the colour
+/// cube (16–231) and the 24-step grey ramp (232–255), whichever lands closer.
+fn nearest_256(r: u8, g: u8, b: u8) -> u8 {
+    let (ri, rv) = nearest_cube_step(r);
+    let (gi, gv) = nearest_cube_step(g);
+    let (bi, bv) = nearest_cube_step(b);
+    let cube_index = 16 + 36 * ri + 6 * gi + bi;
+    let cube_dist = rgb_dist((r, g, b), (rv, gv, bv));
+
+    // Grey ramp: index 232+i carries the value 8 + 10*i.
+    let grey_avg = ((r as u16 + g as u16 + b as u16) / 3) as u8;
+    let mut grey_i = 0u8;
+    let mut grey_best = i16::MAX;
+    for i in 0..24u8 {
+        let value = 8 + 10 * i as i16;
+        let dist = (value - grey_avg as i16).abs();
+        if dist < grey_best {
+            grey_best = dist;
+            grey_i = i;
+        }
+    }
+    let grey_value = 8 + 10 * grey_i;
+    let grey_dist = rgb_dist((r, g, b), (grey_value, grey_value, grey_value));
+
+    if grey_dist < cube_dist {
+        232 + grey_i
+    } else {
+        cube_index
+    }
 }
 
 impl Default for Theme {
@@ -291,5 +385,31 @@ mod tests {
             let t = make();
             assert_eq!(Theme::from_name(&t.key()).name, t.name);
         }
+    }
+
+    #[test]
+    fn adapt_is_identity_on_truecolor() {
+        let t = Theme::kyoto_night();
+        assert_eq!(t.adapt(true), t);
+    }
+
+    #[test]
+    fn adapt_downsamples_to_indexed_and_keeps_name() {
+        let t = Theme::kyoto_night().adapt(false);
+        assert_eq!(t.name, "kyoto night"); // name survives, so cycling still works
+        // Every colour becomes an indexed palette entry off truecolor.
+        for c in [t.background, t.text, t.accent, t.error, t.highlight] {
+            assert!(matches!(c, Color::Indexed(_)), "expected indexed, got {c:?}");
+        }
+        // An adapted theme can still be cycled (lookup is by name).
+        assert_eq!(t.next().name, Theme::kyoto_night().next().name);
+    }
+
+    #[test]
+    fn nearest_256_maps_extremes() {
+        assert_eq!(nearest_256(0, 0, 0), 16); // black -> cube origin
+        assert_eq!(nearest_256(255, 255, 255), 231); // white -> cube apex
+        // A pure cube primary lands on its exact cube cell.
+        assert_eq!(nearest_256(255, 0, 0), 196);
     }
 }

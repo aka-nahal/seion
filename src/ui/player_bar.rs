@@ -18,7 +18,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(ui::border_color(theme)))
-        .style(Style::new().bg(theme.background).fg(theme.text))
+        .style(Style::new().bg(ui::panel_bg(theme)).fg(theme.text))
         .padding(Padding::horizontal(2));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -77,19 +77,32 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(track_line), track_row);
 
     // --- the progress line ---
-    progress::render(frame, progress_row, theme, state.position, state.duration);
+    progress::render(
+        frame,
+        progress_row,
+        theme,
+        state.position,
+        state.duration,
+        app.config.progress_remaining,
+    );
 
     // --- controls + transient status ---
+    // Give the controls exactly the room they need (clamped to the row) and let
+    // the status take whatever remains, right-aligned. A fixed split could clip
+    // a long status on a wide bar or collide on a narrow one.
+    let controls = controls_line(app);
+    let controls_w = (controls.width() as u16).min(controls_row.width);
     let [controls_area, status_area] =
-        Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)])
+        Layout::horizontal([Constraint::Length(controls_w), Constraint::Min(0)])
+            .spacing(2)
             .areas(controls_row);
-    frame.render_widget(Paragraph::new(controls_line(app)), controls_area);
+    frame.render_widget(Paragraph::new(controls), controls_area);
 
     if let Some(status) = &app.status {
         let color = if status.error {
             theme.error
         } else {
-            theme.secondary
+            theme.success
         };
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(status.text.clone(), Style::new().fg(color))))

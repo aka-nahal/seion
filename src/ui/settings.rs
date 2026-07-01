@@ -11,7 +11,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
-use crate::app::App;
+use crate::app::{App, SETTINGS_ITEMS};
 use crate::theme::Theme;
 use crate::ui;
 
@@ -19,37 +19,17 @@ use crate::ui;
 pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let theme = app.theme;
 
-    let backend = if app.player.is_available() {
-        app.config.mpv_path.clone()
-    } else {
-        format!("{}  (not found)", app.config.mpv_path)
-    };
-
-    // The toggle reads on/off, with a gentle nudge when no application id is set.
-    let discord = if app.config.discord_client_id.trim().is_empty() {
-        format!("{}  (set client id)", on_off(app.config.discord_presence))
-    } else {
-        on_off(app.config.discord_presence)
-    };
-
-    // Order must match `crate::app::SETTINGS_ITEMS`.
-    let rows: [(&str, String); 7] = [
-        ("theme", theme.name.to_string()),
-        ("idle rain", on_off(app.config.rain_on_idle)),
-        ("visualizer", on_off(app.config.visualizer)),
-        ("discord presence", discord),
-        ("daily quote", on_off(app.config.daily_quote)),
-        ("audio backend", backend),
-        ("search results", app.config.search_limit.to_string()),
-    ];
-
     let block = ui::panel(&theme, "settings · enter to change");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
     let selected = app.settings_state.selected().unwrap_or(0);
+    // Labels are the single source of truth (`SETTINGS_ITEMS`); the value for
+    // each row is derived by the same index the dispatcher cycles on, so the two
+    // can't drift. The label column is sized from the longest label.
+    let label_width = SETTINGS_ITEMS.iter().map(|l| l.len()).max().unwrap_or(0) + 4;
 
-    for (i, (label, value)) in rows.iter().enumerate() {
+    for (i, label) in SETTINGS_ITEMS.iter().enumerate() {
         let y = inner.y + i as u16;
         if y >= inner.bottom() {
             break;
@@ -73,15 +53,46 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
             Style::new().fg(theme.text)
         };
 
+        let value = setting_value(app, i);
         let mut spans = vec![
             Span::styled(prefix, Style::new().fg(theme.accent)),
-            Span::styled(format!("{label:<16}{value}"), text_style),
+            Span::styled(format!("{label:<label_width$}{value}"), text_style),
         ];
         if i == 0 {
             spans.extend(swatches(&theme));
         }
 
         frame.render_widget(Paragraph::new(Line::from(spans)), row);
+    }
+}
+
+/// The display value for the settings row at `index`. The order mirrors
+/// [`SETTINGS_ITEMS`] and the dispatcher's `cycle_setting`.
+fn setting_value(app: &App, index: usize) -> String {
+    match index {
+        0 => app.theme.name.to_string(),
+        1 => on_off(app.config.rain_on_idle),
+        2 => on_off(app.config.visualizer),
+        3 => {
+            // The toggle reads on/off, with a nudge when no application id is set.
+            if app.config.discord_client_id.trim().is_empty() {
+                format!("{}  (set client id)", on_off(app.config.discord_presence))
+            } else {
+                on_off(app.config.discord_presence)
+            }
+        }
+        4 => on_off(app.config.daily_quote),
+        5 => {
+            if app.player.is_available() {
+                app.config.mpv_path.clone()
+            } else {
+                format!("{}  (not found)", app.config.mpv_path)
+            }
+        }
+        6 => app.config.search_limit.to_string(),
+        7 => if app.config.progress_remaining { "remaining" } else { "total" }.to_string(),
+        8 => on_off(app.config.truecolor),
+        _ => String::new(),
     }
 }
 

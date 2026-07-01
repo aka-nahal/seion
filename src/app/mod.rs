@@ -131,6 +131,8 @@ pub const SETTINGS_ITEMS: &[&str] = &[
     "daily quote",
     "audio backend",
     "search results",
+    "progress time",
+    "truecolor",
 ];
 
 /// Everything that can happen, funnelled onto one channel.
@@ -245,7 +247,7 @@ impl App {
     /// prime the library lists. Returns the app and the event receiver.
     pub async fn new() -> anyhow::Result<(Self, UnboundedReceiver<AppEvent>)> {
         let config = Config::load();
-        let theme = Theme::from_name(&config.theme);
+        let theme = Theme::from_name(&config.theme).adapt(config.truecolor);
         let db = Database::open().or_else(|_| Database::in_memory())?;
         let (tx, rx) = mpsc::unbounded_channel();
         let player = Player::launch(&config, tx.clone());

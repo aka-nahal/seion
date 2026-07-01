@@ -35,8 +35,10 @@ track plays, a soft visualizer breathes quietly behind the now-playing screen.
 | Rust ≥ 1.88 (edition 2024) | building | to build from source |
 
 A terminal with **24-bit ("truecolor")** support is recommended — Windows
-Terminal, WezTerm, Kitty, Alacritty, Ghostty, foot, iTerm2 all qualify. Without
-it the muted palette is approximated.
+Terminal, WezTerm, Kitty, Alacritty, Ghostty, foot, iTerm2 all qualify. On a
+more limited terminal, set `truecolor = false` in the config (or toggle it in
+settings) and the muted palette is mapped to the nearest 256 colours rather than
+left to the terminal to approximate.
 
 If mpv is not installed, Seion still opens and lets you browse and search; it
 simply tells you, quietly, that audio is unavailable.
@@ -129,7 +131,8 @@ playback and degrades quietly, exactly like mpv.
 Stored under your platform's standard directories (via `directories`):
 
 - **config** — `config.toml` (theme, volume, search result count, mpv/yt-dlp
-  paths, idle rain, visualizer, daily quote, Discord presence + application id).
+  paths, idle rain, visualizer, progress time (total/remaining), truecolor,
+  daily quote, Discord presence + application id).
   Hand-editable; missing keys fall back to defaults, malformed files fall back
   entirely.
 - **data** — `seion.db` (SQLite: liked songs + history) and `downloads/`

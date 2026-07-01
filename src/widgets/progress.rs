@@ -13,15 +13,21 @@ use crate::theme::Theme;
 use crate::ui;
 use crate::utils;
 
-/// Render the progress line into a single-row `area`.
-pub fn render(frame: &mut Frame, area: Rect, theme: &Theme, position: f64, duration: f64) {
+/// Render the progress line into a single-row `area`. When `remaining` is set
+/// the right-hand label counts down (`-mm:ss`) instead of showing the total.
+pub fn render(frame: &mut Frame, area: Rect, theme: &Theme, position: f64, duration: f64, remaining: bool) {
     if area.width == 0 {
         return;
     }
 
     let position_label = utils::format_position(position);
     let total_label = if duration > 0.0 {
-        utils::format_duration(duration as u64)
+        if remaining {
+            let left = (duration - position).max(0.0);
+            format!("-{}", utils::format_duration(left as u64))
+        } else {
+            utils::format_duration(duration as u64)
+        }
     } else {
         "--:--".to_string()
     };

@@ -30,6 +30,13 @@ pub struct Config {
     pub rain_on_idle: bool,
     /// Breathe a soft visualizer band behind the now-playing screen.
     pub visualizer: bool,
+    /// Show the time **remaining** (a `-mm:ss` countdown) on the progress bar
+    /// instead of the track's total length.
+    pub progress_remaining: bool,
+    /// Whether the terminal supports 24-bit ("truecolor"). On by default; set to
+    /// `false` for a limited terminal and the palette is mapped to the nearest
+    /// 256-colour entries instead of being left to the terminal to approximate.
+    pub truecolor: bool,
     /// Share the current track on Discord as Rich Presence.
     pub discord_presence: bool,
     /// Discord application id used for Rich Presence. Defaults to Seion's own app
@@ -50,8 +57,10 @@ impl Default for Config {
             daily_quote: true,
             rain_on_idle: true,
             visualizer: true,
+            progress_remaining: false,
             discord_presence: true,
             discord_client_id: crate::discord::DEFAULT_CLIENT_ID.to_string(),
+            truecolor: true,
         }
     }
 }

@@ -9,6 +9,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
 use crate::ui;
@@ -26,10 +27,13 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
     ))
     .centered();
 
+    // Just the view name now — the old "· peaceful music terminal" tagline
+    // repeated on every screen and earned its keep nowhere. The splash carries
+    // the mood; here we stay quiet and contextual.
     let subtitle_text = if app.view.title().is_empty() {
         "peaceful music terminal".to_string()
     } else {
-        format!("{} · peaceful music terminal", app.view.title())
+        app.view.title().to_string()
     };
     let subtitle = Line::from(Span::styled(
         subtitle_text,
@@ -41,12 +45,32 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
 
     frame.render_widget(Paragraph::new(vec![logo, subtitle]).centered(), title_area);
 
-    let separator = "─".repeat(area.width as usize);
-    frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            separator,
-            Style::new().fg(ui::border_color(theme)),
-        ))),
-        sep_area,
-    );
+    frame.render_widget(Paragraph::new(separator_line(app, sep_area.width)), sep_area);
+}
+
+/// The thin divider beneath the header. When a track is playing it carries a
+/// faint, right-aligned `♪ title` so you always know what's on without leaving
+/// the current screen; the rest of the row is the usual soft rule.
+fn separator_line(app: &App, width: u16) -> Line<'static> {
+    let theme = &app.theme;
+    let rule = Style::new().fg(ui::border_color(theme));
+    let full = width as usize;
+
+    // Only show the indicator when there's a track and the row is wide enough to
+    // carry it without crowding the rule.
+    if let Some(track) = &app.player.state.current {
+        let title = utils::truncate(&track.title, 30);
+        let indicator = format!("♪ {title} ");
+        let ind_w = UnicodeWidthStr::width(indicator.as_str());
+        if full > ind_w + 8 {
+            let dashes = full - ind_w - 1;
+            return Line::from(vec![
+                Span::styled("─".repeat(dashes), rule),
+                Span::styled(" ", rule),
+                Span::styled(indicator, Style::new().fg(theme.muted)),
+            ]);
+        }
+    }
+
+    Line::from(Span::styled("─".repeat(full), rule))
 }

@@ -99,7 +99,7 @@ impl App {
                 self.set_status(if on { "visualizer on" } else { "visualizer off" }, false);
             }
             CycleTheme => {
-                self.theme = self.theme.next();
+                self.theme = self.theme.next().adapt(self.config.truecolor);
                 self.config.theme = self.theme.key();
                 let _ = self.config.save();
                 self.set_status(format!("theme — {}", self.theme.name), false);
@@ -463,7 +463,7 @@ impl App {
     fn cycle_setting(&mut self, index: usize) {
         match index {
             0 => {
-                self.theme = self.theme.next();
+                self.theme = self.theme.next().adapt(self.config.truecolor);
                 self.config.theme = self.theme.key();
                 let _ = self.config.save();
                 self.set_status(format!("theme — {}", self.theme.name), false);
@@ -524,6 +524,25 @@ impl App {
                 self.config.search_limit = next;
                 let _ = self.config.save();
                 self.set_status(format!("search results — {next}"), false);
+            }
+            7 => {
+                self.config.progress_remaining = !self.config.progress_remaining;
+                let _ = self.config.save();
+                let remaining = self.config.progress_remaining;
+                self.set_status(
+                    if remaining { "progress — remaining" } else { "progress — total" },
+                    false,
+                );
+            }
+            8 => {
+                self.config.truecolor = !self.config.truecolor;
+                let _ = self.config.save();
+                // Rebuild the palette from the preset and re-adapt to the new
+                // depth so the change shows immediately.
+                self.theme = crate::theme::Theme::from_name(&self.config.theme)
+                    .adapt(self.config.truecolor);
+                let on = self.config.truecolor;
+                self.set_status(if on { "truecolor on" } else { "truecolor off (256-colour)" }, false);
             }
             _ => {}
         }
